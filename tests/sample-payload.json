@@ -1,0 +1,18 @@
+{
+  "pullrequest": {
+    "id": 1,
+    "author": {
+      "display_name": "Jane Dev"
+    },
+    "links": {
+      "diff": {
+        "href": "https://api.bitbucket.org/2.0/repositories/workspace/repo/pullrequests/1/diff"
+      }
+    }
+  },
+  "repository": {
+    "name": "repo",
+    "slug": "repo",
+    "full_name": "workspace/repo"
+  }
+}
