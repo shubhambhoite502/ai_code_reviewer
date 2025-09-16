@@ -1,3 +1,4 @@
+import json
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import JSONResponse
 import os
@@ -5,16 +6,20 @@ from .config import (
     POST_PR_COMMENT, SEND_EMAIL, DEFAULT_RECIPIENT_EMAIL, MAX_TOKENS_PER_CHUNK
 )
 from .services.bitbucket import fetch_pr_diff, post_pr_comment
-from .services.llm import review_diff_chunks
+from .services.notion import save_testcases_to_notion, fetch_epic_from_notion
+from .services.llm import review_diff_chunks,generate_test_cases
 from .services.review_formatter import format_review
 from .services.email_ses import send_email_ses
 from .utils.chunker import chunk_text
 from .utils.logger import logger
 import time
 import asyncio
-
+import re
 
 processed_prs = set()  # ideally, use a persistent cache like Redis
+
+processed_mrs = set()  # ideally, use a persistent cache like Redis
+
 
 app = FastAPI(title="Bitbucket AI Code Reviewer")
 
@@ -90,3 +95,66 @@ async def handle_bitbucket(request: Request, x_event_key: str = Header(None)):
 async def remove_after_delay(key: str, delay: int = 600):
     await asyncio.sleep(delay)
     processed_prs.discard(key)
+
+@app.post("/webhooks/bitbucket-pr-merged")
+async def handle_pr_merge(request: Request):
+    try:
+        payload = await request.json()
+
+        pr = payload["pullrequest"]
+        repo = payload["repository"]
+        pr_id = pr["id"]
+        branch_name = pr["source"]["branch"]["name"]
+        repo_slug = repo.get("slug") or repo.get("name")
+        author = pr["author"]["display_name"]
+
+        # --- Extract Epic No from branch name ---
+        match = re.search(r"(EPIC-\d+)", branch_name, re.IGNORECASE)
+        epic_no = match.group(1).upper() if match else None
+
+        if not epic_no:
+            logger.warning("No Epic No found in branch name: %s", branch_name)
+            return JSONResponse({"status": "ignored", "reason": "no epic found"})
+
+        logger.info("PR merged for repo=%s branch=%s epic=%s", repo_slug, branch_name, epic_no)
+
+        if epic_no in processed_mrs:
+            return {"status": "ignored", "reason": "already processed."}
+
+        processed_mrs.add(epic_no)
+        # schedule removal after 10 min
+        asyncio.create_task(remove_after_delay(epic_no, 1000))
+
+        # --- 1. Fetch Epic details from Notion ---
+        epic_details = fetch_epic_from_notion(epic_no)
+
+        page_id = (epic_details or {}).get("epicPageId", None)
+        
+        if not page_id:
+            logger.warning("No Notion page ID found for Epic: %s", epic_no)
+            return JSONResponse({"status": "ignored", "reason": "no notion page id found"})
+
+        if not epic_details:
+            logger.warning("No details found in Notion for Epic: %s", epic_no)
+            return JSONResponse({"status": "ignored", "reason": "no epic details found"})
+        epic_name = (epic_details or {}).get("Epic Name", "N/A")
+
+
+        pr_title = pr.get("title") or ""
+        pr_desc = pr.get("description") or ""
+        diff = fetch_pr_diff(pr["links"]["diff"]["href"]) or ""
+
+        # --- 2. Generate Test Cases via LLM ---
+        combined_context = f"{pr_title}\n\n{pr_desc}\n\n{diff}"
+        testcases = generate_test_cases(epic_no, epic_name, epic_details['PRD'], combined_context)
+
+        print(testcases,'testcases')
+
+        # --- 3. Store in Notion Test Cases DB ---
+        save_testcases_to_notion(page_id, testcases)
+
+        return {"status": "ok", "epic": epic_no, "testcases_stored": ''}
+
+    except Exception as e:
+        logger.error("Error in PR merge handler: %s", str(e), exc_info=True)
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)

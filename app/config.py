@@ -19,5 +19,11 @@ DEFAULT_RECIPIENT_EMAIL = os.getenv("DEFAULT_RECIPIENT_EMAIL", "")
 POST_PR_COMMENT = os.getenv("POST_PR_COMMENT", "true").lower() == "true"
 SEND_EMAIL = os.getenv("SEND_EMAIL", "true").lower() == "true"
 
+NOTION_TESTCASES_DB_ID = os.getenv("NOTION_TESTCASES_DB_ID", "")
+NOTION_BACKLOG_DB_ID = os.getenv("NOTION_BACKLOG_DB_ID", "")
+NOTION_API_KEY = os.getenv("NOTION_API_KEY", "")
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+
 # heuristic for chunking long diffs (characters per chunk)
 MAX_TOKENS_PER_CHUNK = int(os.getenv("MAX_TOKENS_PER_CHUNK", "8000"))

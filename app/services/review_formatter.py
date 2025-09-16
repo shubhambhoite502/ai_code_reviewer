@@ -2,6 +2,10 @@ def format_review(sections: dict) -> str:
     parts = []
     title = sections.get("title", "🤖 AI Code Review")
     parts.append(f"### {title}\n")
+    if "effort_estimate" in sections:
+        parts.append(f"**Effort Estimate**\n{sections['effort_estimate']}\n")
+    if "flags" in sections:
+        parts.append(f"**Flags**\n{', '.join(sections['flags'])}\n")
     if "summary" in sections:
         parts.append(f"**Summary**\n{sections['summary']}\n")
     if "issues" in sections and sections["issues"]:
