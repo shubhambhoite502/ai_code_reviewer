@@ -14,22 +14,27 @@ def fetch_epic_from_notion(epic_no: str):
     """
     Fetch Epic details from Notion Epic DB by Epic No.
     Returns dict with Epic Name, PRD, Tech Notes.
-    """
+    """ 
+    print(NOTION_BACKLOG_DB_ID,'NOTION_BACKLOG_DB_ID')
 
-    url = "https://api.notion.com/v1/databases/d417ea956904407b93be2980314bd675/query"
- 
-    print(epic_no,"epic_no")
+    url = "https://api.notion.com/v1/databases/{NOTION_BACKLOG_DB_ID}/query"
+    
+    print(epic_no,'epic_no')
+    value = epic_no.split("-")[1]
+    print(value,'value')
+
+
     try:
         response = requests.post(url, headers=HEADERS,json={})
         response.raise_for_status()
         results = response.json()
         epic = None
         for row in results["results"]:
-            if  row["properties"]["04"]["unique_id"]["number"] == 1675:
+            if  row["properties"]["04"]["unique_id"]["number"] == int(value):
                 epic = row
                 break
         
-        # print(epic,'epic')
+
         if not epic:
             return None
 
